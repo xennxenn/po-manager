@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Upload, Search, Trash2, Edit, X, AlertTriangle, ArrowUpCircle } from 'lucide-react';
+import { Upload, Search, Trash2, Edit, X, AlertTriangle, ArrowUpCircle, Printer } from 'lucide-react';
 import { doc, setDoc, deleteDoc, Firestore } from 'firebase/firestore';
 import { EquipmentSet, Item, Supplier, EquipmentSetItem } from '../types';
 
@@ -33,6 +33,10 @@ export default function EquipmentSetMaster({
   const [showImportModal, setShowImportModal] = useState(false);
   const [importPending, setImportPending] = useState<any[]>([]); 
   const [importResults, setImportResults] = useState<Record<string, string>>({}); 
+
+  // Print Report States
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [printOption, setPrintOption] = useState<'names-only' | 'with-details'>('names-only'); 
 
   const filteredSets = sets.filter(s => {
     const matchSup = s.supplierId === selectedSupId;
@@ -252,7 +256,15 @@ export default function EquipmentSetMaster({
       {selectedSupId && (
         <div className="space-y-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-            <h3 className="font-extrabold text-slate-800 text-sm md:text-base">ชุดอุปกรณ์ที่สร้างไว้แล้ว</h3>
+            <div className="flex items-center gap-3">
+              <h3 className="font-extrabold text-slate-800 text-sm md:text-base">ชุดอุปกรณ์ที่สร้างไว้แล้ว</h3>
+              <button 
+                onClick={() => setIsPrintModalOpen(true)} 
+                className="flex items-center gap-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold px-3 py-1.5 rounded-xl text-xs transition-all shadow-sm"
+              >
+                <Printer size={14}/> พิมพ์รายงาน
+              </button>
+            </div>
             <div className="relative w-full md:w-80">
               <Search size={16} className="absolute left-3.5 top-3.5 text-slate-400"/>
               <input 
@@ -367,6 +379,198 @@ export default function EquipmentSetMaster({
               >
                 ยืนยันการเลือกและนำเข้าทั้งหมด
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isPrintModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:p-0 print:bg-white overflow-y-auto">
+          <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl flex flex-col max-h-[95vh] print:max-h-full print:shadow-none print:rounded-none my-8">
+            <div className="p-6 border-b flex flex-col md:flex-row md:items-center justify-between gap-4 print:hidden">
+              <div>
+                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                  <Printer size={20} className="text-indigo-600"/> พิมพ์รายงานชุดอุปกรณ์
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">เลือกรูปแบบรายงานที่ต้องการเพื่อแสดงพรีวิวสำหรับการพิมพ์</p>
+              </div>
+              
+              <div className="flex bg-slate-100 p-1 rounded-xl gap-1 self-start md:self-auto">
+                <button 
+                  onClick={() => setPrintOption('names-only')} 
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${printOption === 'names-only' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+                >
+                  เฉพาะชื่อชุดอุปกรณ์
+                </button>
+                <button 
+                  onClick={() => setPrintOption('with-details')} 
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${printOption === 'with-details' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+                >
+                  รวมรายละเอียดสินค้า
+                </button>
+              </div>
+            </div>
+
+            {/* Print paper mockup preview */}
+            <div className="p-6 overflow-y-auto flex-1 bg-slate-100 print:bg-white print:p-0" id="print-area-outer">
+              <div id="printable-set-report" className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 w-full max-w-3xl mx-auto print:border-0 print:shadow-none print:p-4 text-black">
+                {/* Scoped style for high-fidelity printing */}
+                <style>{`
+                  @media print {
+                    body * {
+                      visibility: hidden;
+                    }
+                    #printable-set-report, #printable-set-report * {
+                      visibility: visible;
+                    }
+                    #printable-set-report {
+                      position: absolute;
+                      left: 0;
+                      top: 0;
+                      width: 100%;
+                      background: white !important;
+                      color: black !important;
+                    }
+                  }
+                `}</style>
+
+                <div className="text-center border-b pb-6 mb-6">
+                  <h1 className="text-2xl font-black tracking-tight text-slate-900">
+                    {printOption === 'names-only' 
+                      ? 'รายงานสรุปชุดอุปกรณ์สินค้า (Equipment Sets Summary Report)' 
+                      : 'รายงานชุดอุปกรณ์พร้อมรายละเอียดสินค้า (Equipment Sets Detail Report)'
+                    }
+                  </h1>
+                  <p className="text-sm text-slate-500 mt-1">
+                    ข้อมูล ณ วันที่ {new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' })}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-6 text-sm bg-slate-50 p-4 rounded-xl border border-slate-100 print:bg-white">
+                  <div>
+                    <p className="font-bold text-slate-400 text-xs uppercase tracking-wider">ซัพพลายเออร์ (Supplier)</p>
+                    <p className="font-extrabold text-slate-800 text-base mt-0.5">
+                      {suppliers.find(s => s.id === selectedSupId)?.companyName || '-'}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      แบรนด์: {suppliers.find(s => s.id === selectedSupId)?.brandName || '-'}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-slate-400 text-xs uppercase tracking-wider">เอกสารรายงาน</p>
+                    <p className="font-bold text-slate-700 text-sm mt-0.5">จำนวนชุดอุปกรณ์ทั้งหมด {filteredSets.length} ชุด</p>
+                    <p className="text-xs text-slate-500 mt-1">ผู้จัดทำรายงาน: ระบบบริหารการจัดซื้อ Smart PO</p>
+                  </div>
+                </div>
+
+                {printOption === 'names-only' ? (
+                  <table className="w-full text-xs text-left border-collapse border border-slate-200">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                        <th className="p-3 border border-slate-200 w-12 text-center">ที่</th>
+                        <th className="p-3 border border-slate-200">ชื่อชุดอุปกรณ์ (Equipment Set Name)</th>
+                        <th className="p-3 border border-slate-200 w-36 text-center">จำนวนรายการพัสดุ</th>
+                        <th className="p-3 border border-slate-200 text-right w-44">ราคาสุทธิรวมต่อชุด</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredSets.map((s, idx) => {
+                        const displayCur = s.currency || 'THB';
+                        return (
+                          <tr key={s.id} className="border-b border-slate-200 hover:bg-slate-50">
+                            <td className="p-3 border border-slate-200 text-center text-slate-500">{idx + 1}</td>
+                            <td className="p-3 border border-slate-200 font-bold text-slate-800">{s.name}</td>
+                            <td className="p-3 border border-slate-200 text-center font-medium text-slate-600">
+                              {s.items.reduce((total, explicitItem) => total + explicitItem.quantity, 0)} รายการ
+                            </td>
+                            <td className="p-3 border border-slate-200 text-right font-mono font-bold text-indigo-700">
+                              {formatCur(getSetPrice(s.id, displayCur, exchangeRates), displayCur)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {filteredSets.length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="p-8 text-center text-slate-400 font-medium">ไม่พบชุดอุปกรณ์ในรายการพิมพ์</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="space-y-8">
+                    {filteredSets.map((s, idx) => {
+                      const displayCur = s.currency || 'THB';
+                      return (
+                        <div key={s.id} className="border border-slate-200 rounded-xl overflow-hidden print:border-slate-350 print:break-inside-avoid">
+                          <div className="bg-slate-100 p-4 border-b border-slate-200 flex justify-between items-center print:bg-slate-100">
+                            <h3 className="font-extrabold text-sm text-slate-800">
+                              {idx + 1}. {s.name}
+                            </h3>
+                            <span className="font-bold text-xs text-indigo-700">
+                              ราคารวม: {formatCur(getSetPrice(s.id, displayCur, exchangeRates), displayCur)}
+                            </span>
+                          </div>
+                          <table className="w-full text-[11px] text-left border-collapse">
+                            <thead>
+                              <tr className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
+                                <th className="p-2.5 w-24">รหัสสินค้า</th>
+                                <th className="p-2.5">ชื่อสินค้า (Item Name)</th>
+                                <th className="p-2.5 w-24">หมวดหมู่</th>
+                                <th className="p-2.5 w-16 text-center">จำนวน</th>
+                                <th className="p-2.5 w-16 text-center">หน่วย</th>
+                                <th className="p-2.5 w-24 text-right">ราคาต่อหน่วย</th>
+                                <th className="p-2.5 w-24 text-right">ราคาสุทธิ</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {s.items.map((it, idx2) => {
+                                const itemData = items.find(x => x.id === it.itemId);
+                                const itemCur = itemData?.currency || 'THB';
+                                const netPriceOrig = (itemData?.pricePerUnit || 0) * (1 - (itemData?.discountPercent || 0) / 100);
+                                const convertedPrice = convertPrice(netPriceOrig, itemCur, displayCur, exchangeRates);
+                                const rowTotal = convertedPrice * it.quantity;
+                                return (
+                                  <tr key={idx2} className="border-b last:border-0 border-slate-150">
+                                    <td className="p-2.5 font-mono text-slate-600 font-bold">{itemData?.code || '-'}</td>
+                                    <td className="p-2.5 font-medium text-slate-800">{itemData?.itemName || '-'}</td>
+                                    <td className="p-2.5 text-slate-500">{itemData?.category || '-'}</td>
+                                    <td className="p-2.5 text-center font-bold text-slate-700">{it.quantity}</td>
+                                    <td className="p-2.5 text-center text-slate-500">{itemData?.unit || '-'}</td>
+                                    <td className="p-2.5 text-right font-mono">{formatCur(convertedPrice, displayCur)}</td>
+                                    <td className="p-2.5 text-right font-mono font-bold text-indigo-700">{formatCur(rowTotal, displayCur)}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      );
+                    })}
+                    {filteredSets.length === 0 && (
+                      <p className="text-center p-8 text-slate-400 font-medium">ไม่พบชุดอุปกรณ์ในรายการพิมพ์</p>
+                    )}
+                  </div>
+                )}
+
+                <div className="mt-12 pt-6 border-t flex justify-between text-xs text-slate-400 font-medium">
+                  <span>พิมพ์โดยระบบ Smart PO Cloud</span>
+                  <span>หน้า 1 จาก 1</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t bg-slate-50 rounded-b-3xl flex justify-between items-center print:hidden">
+              <button onClick={() => setIsPrintModalOpen(false)} className="text-sm font-bold text-slate-500 hover:text-slate-800">
+                ปิดหน้าต่าง
+              </button>
+              <div className="flex gap-3">
+                <button onClick={() => setIsPrintModalOpen(false)} className="px-5 py-2.5 bg-white border border-slate-300 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-all text-xs">
+                  ยกเลิก
+                </button>
+                <button onClick={() => window.print()} className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all text-xs shadow-lg shadow-indigo-100 flex items-center gap-2">
+                  <Printer size={16}/> พิมพ์รายงาน
+                </button>
+              </div>
             </div>
           </div>
         </div>
