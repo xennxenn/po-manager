@@ -1,0 +1,6 @@
+{
+  "name": "Smart PO Manager",
+  "description": "ระบบจัดการใบสั่งซื้ออัจฉริยะ (Smart PO Manager) พร้อมการกู้คืนข้อมูลระบบเก่าย้อนหลังและทำงานร่วมกันในองค์กร",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
