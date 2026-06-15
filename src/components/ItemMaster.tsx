@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Upload, Plus, X, Search, Edit, Trash2, Printer } from 'lucide-react';
 import { doc, setDoc, deleteDoc, Firestore } from 'firebase/firestore';
 import { Item, Supplier } from '../types';
@@ -254,9 +255,9 @@ export default function ItemMaster({ items, suppliers, db, basePath, showConfirm
       </div>
 
       {isPrintModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:p-0 print:bg-white overflow-y-auto">
-          <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl flex flex-col max-h-[95vh] print:max-h-full print:shadow-none print:rounded-none my-8">
-            <div className="p-6 border-b flex items-center justify-between print:hidden">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:hidden overflow-y-auto">
+          <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl flex flex-col max-h-[95vh] my-8">
+            <div className="p-6 border-b flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                   <Printer size={20} className="text-indigo-600"/> พิมพ์รายงานราคาและรายละเอียดสินค้า
@@ -267,34 +268,15 @@ export default function ItemMaster({ items, suppliers, db, basePath, showConfirm
             </div>
             
             {/* Printable Preview Container */}
-            <div className="p-6 overflow-y-auto flex-1 bg-slate-100 print:bg-white print:p-0" id="printable-area-outer">
-              <div id="printable-product-report" className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 w-full max-w-3xl mx-auto print:border-0 print:shadow-none print:p-4 text-black">
-                {/* Custom style for high-fidelity printing */}
-                <style>{`
-                  @media print {
-                    body * {
-                      visibility: hidden;
-                    }
-                    #printable-product-report, #printable-product-report * {
-                      visibility: visible;
-                    }
-                    #printable-product-report {
-                      position: absolute;
-                      left: 0;
-                      top: 0;
-                      width: 100%;
-                      background: white !important;
-                      color: black !important;
-                    }
-                  }
-                `}</style>
+            <div className="p-6 overflow-y-auto flex-1 bg-slate-100" id="printable-area-outer">
+              <div id="printable-product-report" className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 w-full max-w-3xl mx-auto text-black">
                 
                 <div className="text-center border-b pb-6 mb-6">
                   <h1 className="text-2xl font-black tracking-tight text-slate-900">รายงานรายการสินค้าและราคา (Product Catalog Report)</h1>
                   <p className="text-sm text-slate-500 mt-1">ข้อมูล ณ วันที่ {new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4 mb-6 text-sm bg-slate-50 p-4 rounded-xl border border-slate-100 print:bg-white">
+                <div className="grid grid-cols-2 gap-4 mb-6 text-sm bg-slate-50 p-4 rounded-xl border border-slate-100">
                   <div>
                     <p className="font-bold text-slate-400 text-xs uppercase tracking-wider">ซัพพลายเออร์ (Supplier)</p>
                     <p className="font-extrabold text-slate-800 text-base mt-0.5">
@@ -362,7 +344,7 @@ export default function ItemMaster({ items, suppliers, db, basePath, showConfirm
               </div>
             </div>
             
-            <div className="p-6 border-t bg-slate-50 rounded-b-3xl flex justify-between items-center print:hidden">
+            <div className="p-6 border-t bg-slate-50 rounded-b-3xl flex justify-between items-center">
               <button onClick={() => setIsPrintModalOpen(false)} className="text-sm font-bold text-slate-500 hover:text-slate-800">
                 ปิดหน้าต่าง
               </button>
@@ -377,6 +359,84 @@ export default function ItemMaster({ items, suppliers, db, basePath, showConfirm
             </div>
           </div>
         </div>
+      )}
+
+      {isPrintModalOpen && createPortal(
+        <div className="smart-po-print-container">
+          <div className="p-8 text-black bg-white smart-po-print-page">
+            <div className="text-center border-b pb-6 mb-6">
+              <h1 className="text-2xl font-black tracking-tight text-slate-900">รายงานรายการสินค้าและราคา (Product Catalog Report)</h1>
+              <p className="text-sm text-slate-500 mt-1">ข้อมูล ณ วันที่ {new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4 mb-6 text-sm bg-slate-50 p-4 rounded-xl border border-slate-100">
+              <div>
+                <p className="font-bold text-slate-400 text-xs uppercase tracking-wider">ซัพพลายเออร์ (Supplier)</p>
+                <p className="font-extrabold text-slate-800 text-base mt-0.5">
+                  {suppliers.find(s => s.id === selectedSupId)?.companyName || '-'}
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  แบรนด์: {suppliers.find(s => s.id === selectedSupId)?.brandName || '-'}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="font-bold text-slate-400 text-xs uppercase tracking-wider">เอกสารรายงาน</p>
+                <p className="font-bold text-slate-700 text-sm mt-0.5">จำนวนสินค้าทั้งหมด {filteredItems.length} รายการ</p>
+                <p className="text-xs text-slate-500 mt-1">ผู้จัดทำรายงาน: ระบบบริหารการจัดซื้อ Smart PO</p>
+              </div>
+            </div>
+            
+            <table className="w-full text-xs text-left border-collapse border border-slate-200">
+              <thead>
+                <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                  <th className="p-3 border border-slate-200 w-12 text-center">ที่</th>
+                  <th className="p-3 border border-slate-200 w-28">รหัสสินค้า</th>
+                  <th className="p-3 border border-slate-200 w-32">หมวดหมู่</th>
+                  <th className="p-3 border border-slate-200">ชื่อสินค้า (Item Name)</th>
+                  <th className="p-3 border border-slate-200 w-24 text-center">หน่วย</th>
+                  <th className="p-3 border border-slate-200 w-32 text-center">ขั้นต่ำ (MOQ)</th>
+                  <th className="p-3 border border-slate-200 text-right w-36">ราคาต่อหน่วย</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredItems.map((item, idx) => {
+                  const netPrice = (item.pricePerUnit || 0) * (1 - (item.discountPercent || 0) / 100);
+                  const moqDisplay = item.moqType === 'multiple' ? `ทุกๆ ${item.moq}` : `ขั้นต่ำ ${item.moq}`;
+                  const itemCur = item.currency || 'THB';
+                  return (
+                    <tr key={item.id} className="border-b border-slate-200 hover:bg-slate-50">
+                      <td className="p-3 border border-slate-200 text-center text-slate-500">{idx + 1}</td>
+                      <td className="p-3 border border-slate-200 font-mono font-bold text-slate-700">{item.code}</td>
+                      <td className="p-3 border border-slate-200 text-slate-600">{item.category}</td>
+                      <td className="p-3 border border-slate-200 font-medium text-slate-800">{item.itemName}</td>
+                      <td className="p-3 border border-slate-200 text-center text-slate-600">{item.unit || '-'}</td>
+                      <td className="p-3 border border-slate-200 text-center text-slate-600">
+                        {item.moq > 0 ? moqDisplay : '-'}
+                      </td>
+                      <td className="p-3 border border-slate-200 text-right font-mono font-bold text-indigo-700">
+                        {formatCur(netPrice, itemCur)}
+                        {item.discountPercent > 0 && (
+                          <div className="text-[9px] text-green-600 font-sans font-normal mt-0.5">(ลด {item.discountPercent}%)</div>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+                {filteredItems.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center text-slate-400 font-medium">ไม่พบสินค้าในรายการพิมพ์</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+            
+            <div className="mt-12 pt-6 border-t flex justify-between text-xs text-slate-400 font-medium">
+              <span>พิมพ์โดยระบบ Smart PO Cloud</span>
+              <span>หน้า 1 จาก 1</span>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
