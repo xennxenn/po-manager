@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Upload, Plus, X, Search, Edit, Trash2, Printer } from 'lucide-react';
+import { Upload, Plus, X, Search, Edit, Trash2, Printer, Download } from 'lucide-react';
 import { doc, setDoc, deleteDoc, Firestore } from 'firebase/firestore';
 import { Item, Supplier } from '../types';
 
@@ -29,6 +29,55 @@ export default function ItemMaster({ items, suppliers, db, basePath, showConfirm
                         i.itemName?.toLowerCase().includes(searchLower);
     return matchSup && matchSearch;
   });
+
+  const handleExportCSV = () => {
+    const displaySupplier = suppliers.find(s => s.id === selectedSupId)?.companyName || '-';
+    const escapeCSV = (val: any) => {
+      if (val === null || val === undefined) return '';
+      const str = String(val);
+      return str.replace(/"/g, '""').replace(/\r?\n/g, ' ');
+    };
+
+    const csvRows: string[] = [];
+    csvRows.push(`"รายงานรายการสินค้าและราคา (Product Catalog Report)"`);
+    csvRows.push(`"ซัพพลายเออร์:","${escapeCSV(displaySupplier)}"`);
+    csvRows.push(`"แบรนด์:","${escapeCSV(suppliers.find(s => s.id === selectedSupId)?.brandName || '-')}"`);
+    csvRows.push(`"จำนวนสินค้าทั้งหมด:","${filteredItems.length} รายการ"`);
+    csvRows.push(`"ผู้จัดทำรายงาน:","ระบบบริหารการจัดซื้อ Smart PO"`);
+    csvRows.push(`"วันที่พิมพ์:","${new Date().toLocaleDateString('th-TH')}"`);
+    csvRows.push("");
+
+    csvRows.push(`"ที่","รหัสสินค้า","หมวดหมู่","ชื่อสินค้า (Item Name)","หน่วย","ขั้นต่ำ (MOQ)","ราคาต่อหน่วย (สุทธิ)"`);
+    
+    filteredItems.forEach((item, idx) => {
+      const netPrice = (item.pricePerUnit || 0) * (1 - (item.discountPercent || 0) / 100);
+      const moqDisplay = item.moq > 0 
+        ? (item.moqType === 'multiple' ? `ทุกๆ ${item.moq}` : `ขั้นต่ำ ${item.moq}`)
+        : '-';
+      const priceDisplay = `${netPrice} ${item.currency || 'THB'}` + (item.discountPercent > 0 ? ` (ลด ${item.discountPercent}%)` : '');
+      
+      csvRows.push(
+        `"${idx + 1}",` +
+        `"${escapeCSV(item.code)}",` +
+        `"${escapeCSV(item.category)}",` +
+        `"${escapeCSV(item.itemName)}",` +
+        `"${escapeCSV(item.unit || '-')}",` +
+        `"${escapeCSV(moqDisplay)}",` +
+        `"${escapeCSV(priceDisplay)}"`
+      );
+    });
+
+    const bom = "\uFEFF";
+    const blob = new Blob([bom + csvRows.join("\n")], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const safeSupName = displaySupplier.replace(/[^a-zA-Z0-9ก-๙_]/g, '_');
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Product_Catalog_${safeSupName}_${new Date().toISOString().slice(0,10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const handleEditItem = (item: Item) => {
     setEditingItemId(item.id);
@@ -189,6 +238,13 @@ export default function ItemMaster({ items, suppliers, db, basePath, showConfirm
                   className="flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold px-3 py-1.5 rounded-xl text-xs transition-all shadow-sm"
                 >
                   <Printer size={14}/> พิมพ์รายงานสินค้า
+                </button>
+                <button 
+                  type="button"
+                  onClick={handleExportCSV} 
+                  className="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold px-3 py-1.5 rounded-xl text-xs transition-all shadow-sm"
+                >
+                  <Download size={14}/> ส่งออก CSV
                 </button>
               </div>
               <div className="relative w-full md:w-1/3">
@@ -351,6 +407,9 @@ export default function ItemMaster({ items, suppliers, db, basePath, showConfirm
               <div className="flex gap-3">
                 <button onClick={() => setIsPrintModalOpen(false)} className="px-5 py-2.5 bg-white border border-slate-300 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-all text-xs">
                   ยกเลิก
+                </button>
+                <button onClick={handleExportCSV} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all text-xs shadow-lg shadow-emerald-100 flex items-center gap-2">
+                  <Download size={16}/> ส่งออก CSV
                 </button>
                 <button onClick={() => window.print()} className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all text-xs shadow-lg shadow-indigo-100 flex items-center gap-2">
                   <Printer size={16}/> พิมพ์รายงาน

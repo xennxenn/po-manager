@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Upload, Search, Trash2, Edit, X, AlertTriangle, ArrowUpCircle, Printer } from 'lucide-react';
+import { Upload, Search, Trash2, Edit, X, AlertTriangle, ArrowUpCircle, Printer, Download } from 'lucide-react';
 import { doc, setDoc, deleteDoc, Firestore } from 'firebase/firestore';
 import { EquipmentSet, Item, Supplier, EquipmentSetItem } from '../types';
 
@@ -45,6 +45,73 @@ export default function EquipmentSetMaster({
     return matchSup && matchSearch;
   });
   const itemsForSelectedSupplier = items.filter(i => i.supplierId === selectedSupId);
+
+  const handleExportCSV = () => {
+    const displaySupplier = suppliers.find(s => s.id === selectedSupId)?.companyName || '-';
+    const escapeCSV = (val: any) => {
+      if (val === null || val === undefined) return '';
+      const str = String(val);
+      return str.replace(/"/g, '""').replace(/\r?\n/g, ' ');
+    };
+
+    const csvContent: string[] = [];
+    csvContent.push(`"รายงานสรุปชุดอุปกรณ์สินค้า (${printOption === 'names-only' ? 'เฉพาะชื่อชุดอุปกรณ์' : 'รวมรายละเอียดสินค้า'})"`);
+    csvContent.push(`"ซัพพลายเออร์:","${escapeCSV(displaySupplier)}"`);
+    csvContent.push(`"แบรนด์:","${escapeCSV(suppliers.find(s => s.id === selectedSupId)?.brandName || '-')}"`);
+    csvContent.push(`"ผู้จัดทำรายงาน:","ระบบบริหารการจัดซื้อ Smart PO"`);
+    csvContent.push(`"วันที่พิมพ์:","${new Date().toLocaleDateString('th-TH')}"`);
+    csvContent.push("");
+
+    if (printOption === 'names-only') {
+      csvContent.push(`"ที่","ชื่อชุดอุปกรณ์ (Equipment Set Name)","จำนวนรายการพัสดุ","ราคาสุทธิรวมต่อชุด"`);
+      filteredSets.forEach((s, idx) => {
+        const displayCur = s.currency || 'THB';
+        const totalItemsCount = s.items.reduce((total, explicitItem) => total + explicitItem.quantity, 0);
+        const totalPrice = getSetPrice(s.id, displayCur, exchangeRates);
+        const priceDisplay = formatCur(totalPrice, displayCur);
+        csvContent.push(`"${idx + 1}","${escapeCSV(s.name)}","${totalItemsCount} รายการ","${escapeCSV(priceDisplay)}"`);
+      });
+    } else {
+      filteredSets.forEach((s, idx) => {
+        const displayCur = s.currency || 'THB';
+        const totalPrice = getSetPrice(s.id, displayCur, exchangeRates);
+        const priceDisplay = formatCur(totalPrice, displayCur);
+        
+        csvContent.push(`"ชุดอุปกรณ์ที่ ${idx + 1}:","${escapeCSV(s.name)}","ราคารวมต่อชุด:","${escapeCSV(priceDisplay)}"`);
+        csvContent.push(`"รหัสสินค้า","ชื่อสินค้า (Item Name)","หมวดหมู่","จำนวน","หน่วย","ราคาต่อหน่วย","ราคาสุทธิ"`);
+        
+        s.items.forEach((it) => {
+          const itemData = items.find(x => x.id === it.itemId);
+          const itemCur = itemData?.currency || 'THB';
+          const netPriceOrig = (itemData?.pricePerUnit || 0) * (1 - (itemData?.discountPercent || 0) / 100);
+          const convertedPrice = convertPrice(netPriceOrig, itemCur, displayCur, exchangeRates);
+          const rowTotal = convertedPrice * it.quantity;
+          
+          csvContent.push(
+            `"${escapeCSV(itemData?.code || '-')}",` +
+            `"${escapeCSV(itemData?.itemName || '-')}",` +
+            `"${escapeCSV(itemData?.category || '-')}",` +
+            `"${it.quantity}",` +
+            `"${escapeCSV(itemData?.unit || '-')}",` +
+            `"${escapeCSV(formatCur(convertedPrice, displayCur))}",` +
+            `"${escapeCSV(formatCur(rowTotal, displayCur))}"`
+          );
+        });
+        csvContent.push(""); // spacer row
+      });
+    }
+
+    const bom = "\uFEFF";
+    const blob = new Blob([bom + csvContent.join("\n")], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const safeSupName = displaySupplier.replace(/[^a-zA-Z0-9ก-๙_]/g, '_');
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Equipment_Sets_${printOption}_${safeSupName}_${new Date().toISOString().slice(0,10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const { totalFullPrice, totalNetPrice } = useMemo(() => {
     return setItems.reduce((acc, si) => {
@@ -264,6 +331,12 @@ export default function EquipmentSetMaster({
                 className="flex items-center gap-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold px-3 py-1.5 rounded-xl text-xs transition-all shadow-sm"
               >
                 <Printer size={14}/> พิมพ์รายงาน
+              </button>
+              <button 
+                onClick={handleExportCSV} 
+                className="flex items-center gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold px-3 py-1.5 rounded-xl text-xs transition-all shadow-sm"
+              >
+                <Download size={14}/> ส่งออก CSV
               </button>
             </div>
             <div className="relative w-full md:w-80">
@@ -549,7 +622,10 @@ export default function EquipmentSetMaster({
                 <button onClick={() => setIsPrintModalOpen(false)} className="px-5 py-2.5 bg-white border border-slate-300 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-all text-xs">
                   ยกเลิก
                 </button>
-                <button onClick={() => window.print()} className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all text-xs shadow-lg shadow-indigo-100 flex items-center gap-2">
+                <button onClick={handleExportCSV} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all text-xs shadow-lg shadow-emerald-100 flex items-center gap-2">
+                  <Download size={16}/> ส่งออก CSV
+                </button>
+                <button onClick={() => window.print()} className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all text-xs shadow-lg shadow-indigo-150 flex items-center gap-2">
                   <Printer size={16}/> พิมพ์รายงาน
                 </button>
               </div>
